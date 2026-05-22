@@ -7,6 +7,15 @@ interface PowerUp extends Point { vy: number; radius: number; color: string; typ
 interface Star extends Point { size: number; speed: number; alpha: number; type: 'background' | 'foreground' }
 interface FloatingText extends Point { text: string; color: string; life: number; maxLife: number; vy: number; }
 
+interface ActiveWingman {
+    x: number; y: number; vx: number; vy: number;
+    bp: {x: number, y: number, partId: string}[];
+    hp: number; maxHp: number;
+    weapons: any[]; speed: number;
+    lastShotTime: number; angleOffset: number;
+    orbitRadius: number;
+}
+
 @Component({
   selector: 'app-root',
   template: `
@@ -23,18 +32,19 @@ interface FloatingText extends Point { text: string; color: string; life: number
       </canvas>
 
       @if (!gameStarted()) {
-        <div class="absolute inset-0 flex flex-col items-center justify-center bg-transparent z-50">
-          <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"></div>
-          <div class="relative z-10 flex flex-col items-center w-full max-w-6xl px-4 mt-8">
-            <h1 class="text-4xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-cyan-400 tracking-widest filter drop-shadow-[0_0_30px_rgba(34,211,238,0.5)] font-mono">机库</h1>
-            <div class="text-2xl text-yellow-400 font-mono mb-8 font-bold flex items-center gap-2 drop-shadow-md">
-               <span class="material-icons">toll</span> {{ coins() }} 信用点
-            </div>
-            
-            <div class="flex flex-col lg:flex-row gap-8 w-full justify-center mb-8 h-[60vh] min-h-[400px]">
-              <!-- LEFT: GRID BUILDER -->
-              <div class="flex-1 border border-white/20 rounded-2xl bg-slate-900/40 p-4 flex flex-col items-center justify-center relative backdrop-blur-md overflow-hidden">
-                 <h2 class="absolute top-4 left-4 text-xl font-mono text-cyan-400 font-bold tracking-widest hidden md:block">组装网格</h2>
+        <div class="absolute inset-0 z-50 overflow-y-auto custom-scrollbar">
+          <div class="min-h-full flex flex-col items-center justify-center py-10 relative">
+            <div class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm block pointer-events-none"></div>
+            <div class="relative z-10 flex flex-col items-center w-full max-w-6xl px-2 sm:px-4">
+              <h1 class="text-3xl sm:text-4xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-cyan-400 tracking-widest filter drop-shadow-[0_0_30px_rgba(34,211,238,0.5)] font-mono">机库</h1>
+              <div class="text-xl sm:text-2xl text-yellow-400 font-mono mb-4 sm:mb-8 font-bold flex items-center gap-2 drop-shadow-md">
+                 <span class="material-icons">toll</span> {{ coins() }} 信用点
+              </div>
+              
+              <div class="flex flex-col lg:flex-row gap-4 sm:gap-8 w-full justify-center mb-4 sm:mb-8 lg:h-[60vh] min-h-0 sm:min-h-[500px]">
+                <!-- LEFT: GRID BUILDER -->
+                <div class="flex-1 w-full border border-white/20 rounded-2xl bg-slate-900/40 p-2 sm:p-4 shrink-0 lg:shrink flex flex-col items-center justify-center relative backdrop-blur-md overflow-hidden min-h-[250px] sm:min-h-[350px]">
+                   <h2 class="absolute top-2 sm:top-4 left-2 sm:left-4 text-lg sm:text-xl font-mono text-cyan-400 font-bold tracking-widest hidden md:block">组装网格</h2>
                  
                  <div class="absolute top-4 right-4 flex justify-end gap-2 px-4 pointer-events-none z-10 hidden sm:flex">
                     <div class="flex items-center gap-1 text-slate-300 font-mono text-xs bg-black/50 px-2 py-1 rounded-full border border-white/10">
@@ -65,21 +75,31 @@ interface FloatingText extends Point { text: string; color: string; life: number
                              @if (getPartAt(col, row); as p) {
                                 <div class="absolute inset-0 m-[1px] flex items-center justify-center pointer-events-none z-10"> 
                                      <svg class="w-full h-full overflow-visible drop-shadow-sm" viewBox="0 0 10 10">
-                                        @if (getPartDef(p.partId)?.type === 'core') {
+                                        @if (getPartAt(col, row - 1)) {
+                                            <!-- Up connection -->
+                                            <rect x="3.5" y="-3" width="3" height="4" fill="#334155" />
+                                            <rect x="4.5" y="-1.5" width="1" height="2" fill="#94a3b8" />
+                                        }
+                                        @if (getPartAt(col - 1, row)) {
+                                            <!-- Left connection -->
+                                            <rect x="-3" y="3.5" width="4" height="3" fill="#334155" />
+                                            <rect x="-1.5" y="4.5" width="2" height="1" fill="#94a3b8" />
+                                        }
+                                        @if (getPartDef(p.partId)?.type === 'core' || getPartDef(p.partId)?.type === 'wingman_core') {
                                            <circle cx="5" cy="5" r="4.5" [attr.fill]="getPartDef(p.partId)?.color" />
                                            <circle cx="5" cy="5" r="3" fill="#ffffff" />
                                            <circle cx="5" cy="5" r="1.5" fill="#93c5fd" />
                                         }
                                         @if (getPartDef(p.partId)?.type === 'hull') {
-                                            <polygon points="5,1 9,5 5,9 1,5" [attr.fill]="getPartDef(p.partId)?.color" stroke="rgba(255,255,255,0.2)" stroke-width="0.5"/>
+                                            <rect x="1" y="1" width="8" height="8" [attr.fill]="getPartDef(p.partId)?.color" stroke="rgba(255,255,255,0.2)" stroke-width="0.5"/>
                                         }
                                         @if (getPartDef(p.partId)?.type === 'engine') {
-                                            <polygon points="1,1 9,1 7,9 3,9" [attr.fill]="getPartDef(p.partId)?.color" />
-                                            <rect x="3" y="9" width="4" height="2" fill="#475569" />
+                                            <rect x="1" y="1" width="8" height="8" [attr.fill]="getPartDef(p.partId)?.color" />
+                                            <rect x="3" y="8" width="4" height="2" fill="#475569" />
                                         }
                                         @if (getPartDef(p.partId)?.type === 'weapon') {
-                                            <polygon points="2,9 8,9 7,1 5,-3 3,1" [attr.fill]="getPartDef(p.partId)?.color" />
-                                            <rect x="4.5" y="-1" width="1" height="5" fill="#ffffff" />
+                                            <rect x="2" y="2" width="6" height="6" [attr.fill]="getPartDef(p.partId)?.color" />
+                                            <rect x="4" y="-1" width="2" height="6" fill="#ffffff" />
                                         }
                                      </svg>
                                 </div>
@@ -93,33 +113,36 @@ interface FloatingText extends Point { text: string; color: string; life: number
               </div>
 
               <!-- RIGHT: INVENTORY -->
-              <div class="flex-1 flex flex-col gap-4 border border-white/20 rounded-2xl bg-slate-900/40 p-4 h-full overflow-hidden backdrop-blur-md">
-                 <h2 class="text-xl font-mono text-cyan-400 font-bold tracking-widest text-center sticky top-0 bg-slate-900/80 z-10 py-2 border-b border-white/10 mb-2">组件</h2>
-                 <div class="overflow-y-auto custom-scrollbar flex flex-col gap-3 pr-2 pb-4">
+              <div class="flex-1 w-full flex flex-col gap-2 sm:gap-4 border border-white/20 rounded-2xl bg-slate-900/40 p-2 sm:p-4 h-[250px] sm:h-[300px] shrink-0 lg:shrink lg:h-full overflow-hidden backdrop-blur-md">
+                 <h2 class="text-lg sm:text-xl font-mono text-cyan-400 font-bold tracking-widest text-center sticky top-0 bg-slate-900/80 z-10 py-1 sm:py-2 border-b border-white/10 mb-1 sm:mb-2">组件</h2>
+                 <div class="overflow-y-auto custom-scrollbar flex flex-col gap-2 sm:gap-3 pr-1 sm:pr-2 pb-4">
                     @for (part of partCatalog; track part.id) {
                        @if (part.type !== 'core') {
                            <div draggable="true"
                                 (dragstart)="onCatalogDragStart($event, part)"
-                                class="p-3 border border-white/10 bg-slate-800/60 rounded-xl cursor-grab active:cursor-grabbing hover:border-cyan-400 hover:bg-slate-800 transition-all flex flex-col gap-2">
+                                (click)="selectMobilePart(part)"
+                                [class.ring-2]="selectedMobilePart?.id === part.id"
+                                [class.ring-cyan-400]="selectedMobilePart?.id === part.id"
+                                class="p-2 sm:p-3 border border-white/10 bg-slate-800/60 rounded-xl cursor-pointer hover:border-cyan-400 hover:bg-slate-800 transition-all flex flex-col gap-1 sm:gap-2">
                                <div class="flex justify-between items-center text-white">
-                                  <div class="flex items-center gap-3">
-                                     <div class="w-8 h-8 flex items-center justify-center relative">
+                                  <div class="flex items-center gap-2 sm:gap-3">
+                                     <div class="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center relative">
                                         <svg class="w-full h-full overflow-visible drop-shadow-md" viewBox="0 0 10 10">
-                                            @if (part.type === 'core') {
+                                            @if (part.type === 'core' || part.type === 'wingman_core') {
                                                <circle cx="5" cy="5" r="4.5" [attr.fill]="part.color" />
                                                <circle cx="5" cy="5" r="3" fill="#ffffff" />
                                                <circle cx="5" cy="5" r="1.5" fill="#93c5fd" />
                                             }
                                             @if (part.type === 'hull') {
-                                                <polygon points="5,1 9,5 5,9 1,5" [attr.fill]="part.color" stroke="rgba(255,255,255,0.2)" stroke-width="0.5"/>
+                                                <rect x="1" y="1" width="8" height="8" [attr.fill]="part.color" stroke="rgba(255,255,255,0.2)" stroke-width="0.5"/>
                                             }
                                             @if (part.type === 'engine') {
-                                                <polygon points="1,1 9,1 7,9 3,9" [attr.fill]="part.color" />
-                                                <rect x="3" y="9" width="4" height="2" fill="#475569" />
+                                                <rect x="1" y="1" width="8" height="8" [attr.fill]="part.color" />
+                                                <rect x="3" y="8" width="4" height="2" fill="#475569" />
                                             }
                                             @if (part.type === 'weapon') {
-                                                <polygon points="2,9 8,9 7,1 5,-3 3,1" [attr.fill]="part.color" />
-                                                <rect x="4.5" y="-1" width="1" height="5" fill="#ffffff" />
+                                                <rect x="2" y="2" width="6" height="6" [attr.fill]="part.color" />
+                                                <rect x="4" y="-1" width="2" height="6" fill="#ffffff" />
                                             }
                                         </svg>
                                      </div>
@@ -127,15 +150,15 @@ interface FloatingText extends Point { text: string; color: string; life: number
                                   </div>
                                   <span class="text-yellow-400 font-bold font-mono text-sm">{{ part.cost }}¢</span>
                                </div>
-                               <div class="flex gap-4 text-xs font-mono text-slate-400 mt-1 pl-9 overflow-hidden flex-wrap max-h-8 text-ellipsis whitespace-nowrap">
-                                  <span title="质量（越高船体越慢，影响速度）"><span class="material-icons text-[14px] text-slate-500 align-text-bottom">fitness_center</span> {{ part.mass }}</span>
-                                  <span title="耐久"><span class="material-icons text-[14px] text-emerald-500 align-text-bottom">favorite</span> {{ part.hp }}</span>
+                               <div class="flex gap-2 sm:gap-4 text-[10px] sm:text-xs font-mono text-slate-400 mt-1 pl-6 sm:pl-9 overflow-hidden flex-wrap max-h-12 sm:max-h-8 text-ellipsis whitespace-nowrap leading-tight">
+                                  <span title="质量（越高船体越慢，影响速度）"><span class="material-icons text-[12px] sm:text-[14px] text-slate-500 align-text-bottom">fitness_center</span> {{ part.mass }}</span>
+                                  <span title="耐久"><span class="material-icons text-[12px] sm:text-[14px] text-emerald-500 align-text-bottom">favorite</span> {{ part.hp }}</span>
                                   @if (part.type === 'engine') {
-                                     <span title="推力"><span class="material-icons text-[14px] text-amber-500 align-text-bottom">speed</span> {{ part.thrust }}</span>
+                                     <span title="推力"><span class="material-icons text-[12px] sm:text-[14px] text-amber-500 align-text-bottom">speed</span> {{ part.thrust }}</span>
                                   }
                                   @if (part.type === 'weapon') {
-                                     <span title="伤害"><span class="material-icons text-[14px] text-red-500 align-text-bottom">bolt</span> {{ part.damage }}</span>
-                                     <span title="射速"><span class="material-icons text-[14px] text-orange-500 align-text-bottom">sync</span> {{ part.fireRate }}</span>
+                                     <span title="伤害"><span class="material-icons text-[12px] sm:text-[14px] text-red-500 align-text-bottom">bolt</span> {{ part.damage }}</span>
+                                     <span title="射速"><span class="material-icons text-[12px] sm:text-[14px] text-orange-500 align-text-bottom">sync</span> {{ part.fireRate }}</span>
                                   }
                                </div>
                            </div>
@@ -145,22 +168,23 @@ interface FloatingText extends Point { text: string; color: string; life: number
               </div>
             </div>
 
-            <button (click)="startGame()" class="relative group px-16 py-4 border-2 border-cyan-400 text-cyan-400 hover:text-white rounded-full font-black text-2xl transition-all hover:scale-105 active:scale-95 cursor-pointer tracking-widest font-mono overflow-hidden shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_40px_rgba(34,211,238,0.6)]" [class.opacity-50]="!canLaunch()">
+            <button (click)="startGame()" class="relative group px-10 py-3 md:px-16 md:py-4 border-2 border-cyan-400 text-cyan-400 hover:text-white rounded-full font-black text-xl md:text-2xl transition-all hover:scale-105 active:scale-95 cursor-pointer tracking-widest font-mono overflow-hidden shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_40px_rgba(34,211,238,0.6)] shrink-0" [class.opacity-50]="!canLaunch()">
               <div class="absolute inset-0 bg-cyan-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
               <span class="relative z-10 filter drop-shadow-md flex items-center gap-2"><span class="material-icons text-3xl">rocket_launch</span> 发射</span>
             </button>
           </div>
         </div>
+      </div>
       }
 
       @if (showUpgradeUI()) {
-        <div class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-md z-50 transition-all origin-center animate-in fade-in zoom-in duration-500">
-          <h2 class="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400 tracking-widest mb-8 filter drop-shadow-[0_0_20px_rgba(52,211,153,0.5)] font-mono">选择升级</h2>
+        <div class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-md z-50 transition-all origin-center animate-in fade-in zoom-in duration-500 overflow-y-auto custom-scrollbar py-10">
+          <h2 class="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400 tracking-widest mb-8 filter drop-shadow-[0_0_20px_rgba(52,211,153,0.5)] font-mono mt-auto">选择升级</h2>
           
-          <div class="flex flex-col md:flex-row gap-6 p-4">
+          <div class="flex flex-col md:flex-row gap-6 p-4 mb-auto">
             @for (option of upgradeOptions; track option.type) {
                 <button (click)="selectUpgrade(option.type)"
-                        class="bg-slate-900/60 border border-emerald-500/30 rounded-2xl p-6 w-64 flex flex-col items-center text-center transition-all hover:scale-105 hover:bg-slate-800 hover:border-emerald-400 hover:shadow-[0_0_30px_rgba(52,211,153,0.3)] group focus:outline-none">
+                        class="bg-slate-900/60 border border-emerald-500/30 rounded-2xl p-4 sm:p-6 w-full sm:w-64 flex flex-col items-center text-center transition-all hover:scale-105 hover:bg-slate-800 hover:border-emerald-400 hover:shadow-[0_0_30px_rgba(52,211,153,0.3)] group focus:outline-none shrink-0">
                     <div class="w-16 h-16 rounded-full bg-emerald-950/50 border border-emerald-500/50 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(52,211,153,0.6)] transition-all">
                         <span class="material-icons text-3xl text-emerald-400">{{ option.icon }}</span>
                     </div>
@@ -173,34 +197,34 @@ interface FloatingText extends Point { text: string; color: string; life: number
       }
 
       @if (gameOver()) {
-        <div class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-md z-50 transition-all origin-center animate-in fade-in zoom-in duration-500">
-          <h1 class="text-7xl md:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-b from-red-400 to-orange-600 tracking-widest mb-6 filter drop-shadow-[0_0_40px_rgba(239,68,68,0.5)] font-mono">战机摧毁</h1>
-          <div class="flex flex-col items-center bg-black/40 border border-white/10 rounded-2xl p-8 mb-10 w-80 backdrop-blur-xl">
+        <div class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-md z-50 transition-all origin-center animate-in fade-in zoom-in duration-500 overflow-y-auto pt-10">
+          <h1 class="text-5xl sm:text-7xl md:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-b from-red-400 to-orange-600 tracking-widest mb-6 filter drop-shadow-[0_0_40px_rgba(239,68,68,0.5)] font-mono mt-auto">战机摧毁</h1>
+          <div class="flex flex-col items-center bg-black/40 border border-white/10 rounded-2xl p-8 mb-10 w-80 backdrop-blur-xl shrink-0">
              <span class="text-sm text-slate-400 font-mono tracking-widest mb-2">最终得分</span>
              <span class="text-5xl text-white font-black font-mono mb-6">{{ score() }}</span>
              <span class="text-sm text-yellow-400/80 font-mono tracking-widest mb-1">获得信用点</span>
              <span class="text-3xl text-yellow-400 font-black font-mono">+{{ recentTokensEarned }}</span>
           </div>
-          <button (click)="returnToHangar()" class="px-10 py-5 bg-white text-black rounded-xl font-bold text-xl transition-all hover:scale-105 active:scale-95 hover:bg-slate-200 cursor-pointer font-mono tracking-widest uppercase">
+          <button (click)="returnToHangar()" class="px-10 py-5 bg-white text-black rounded-xl font-bold text-xl transition-all hover:scale-105 active:scale-95 hover:bg-slate-200 cursor-pointer font-mono tracking-widest uppercase mb-auto shrink-0">
             返回机库
           </button>
         </div>
       }
 
-      <div class="absolute top-6 left-6 right-6 flex items-start justify-between pointer-events-none select-none z-40">
+      <div class="absolute top-4 left-4 right-4 sm:top-6 sm:left-6 sm:right-6 flex items-start justify-between pointer-events-none select-none z-40">
          <div class="flex flex-col gap-3">
-             <div class="flex gap-3">
-                 <div class="px-8 py-3 bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-full text-white font-mono text-2xl font-black tracking-widest flex items-center gap-4 filter drop-shadow-lg overflow-hidden relative">
+             <div class="flex flex-col sm:flex-row gap-3">
+                 <div class="px-4 py-2 sm:px-8 sm:py-3 bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-full text-white font-mono text-xl sm:text-2xl font-black tracking-widest flex items-center gap-4 filter drop-shadow-lg overflow-hidden relative">
                     <div class="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent"></div>
                     <span class="text-slate-400 text-sm">得分</span> 
                     <span class="bg-gradient-to-br from-emerald-300 to-cyan-400 bg-clip-text text-transparent filter drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]">{{ score() }}</span>
                  </div>
                  
                  @if (gameStarted()) {
-                   <div class="px-6 py-2 bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-full text-white flex flex-col justify-center filter drop-shadow-lg w-48 relative">
+                   <div class="px-4 py-2 sm:px-6 sm:py-2 bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-full text-white flex flex-col justify-center filter drop-shadow-lg w-40 sm:w-48 relative">
                       <div class="flex items-center justify-between gap-2 mb-1">
-                         <span class="text-slate-400 text-sm font-mono">耐久</span>
-                         <span class="text-emerald-400 font-bold font-mono text-sm">{{ health() }} / {{ getShipStats().hp }}</span>
+                         <span class="text-slate-400 text-xs sm:text-sm font-mono">耐久</span>
+                         <span class="text-emerald-400 font-bold font-mono text-xs sm:text-sm">{{ health() }} / {{ getShipStats().hp }}</span>
                       </div>
                       <div class="w-full h-2 bg-slate-950/80 border border-emerald-900/50 rounded-full overflow-hidden relative">
                           <div class="absolute top-0 left-0 h-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-300"
@@ -211,20 +235,20 @@ interface FloatingText extends Point { text: string; color: string; life: number
              </div>
              
              @if (gameStarted()) {
-               <div class="flex items-center gap-4 px-4 mt-2 font-mono text-sm">
+               <div class="flex flex-wrap items-center gap-2 sm:gap-4 px-2 sm:px-4 mt-2 font-mono text-xs sm:text-sm">
                    @if (weaponLevel > 1) {
-                      <div class="flex items-center gap-2 text-cyan-400 font-bold bg-cyan-950/50 px-3 py-1 rounded-full border border-cyan-800/50">
-                         <span class="material-icons text-sm">bolt</span> 武器等级 {{ weaponLevel }}
+                      <div class="flex items-center gap-1 sm:gap-2 text-cyan-400 font-bold bg-cyan-950/50 px-2 sm:px-3 py-1 rounded-full border border-cyan-800/50">
+                         <span class="material-icons text-xs sm:text-sm">bolt</span> 武器等级 {{ weaponLevel }}
                       </div>
                    }
                    @if (hasShield) {
-                      <div class="flex items-center gap-2 text-purple-400 font-bold bg-purple-950/50 px-3 py-1 rounded-full border border-purple-800/50">
-                         <span class="material-icons text-sm">security</span> 护盾运行中
+                      <div class="flex items-center gap-1 sm:gap-2 text-purple-400 font-bold bg-purple-950/50 px-2 sm:px-3 py-1 rounded-full border border-purple-800/50">
+                         <span class="material-icons text-xs sm:text-sm">security</span> 护盾运行中
                       </div>
                    }
                    @if (hasPierce) {
-                      <div class="flex items-center gap-2 text-yellow-400 font-bold bg-yellow-950/50 px-3 py-1 rounded-full border border-yellow-800/50">
-                         <span class="material-icons text-sm">double_arrow</span> 穿甲弹
+                      <div class="flex items-center gap-1 sm:gap-2 text-yellow-400 font-bold bg-yellow-950/50 px-2 sm:px-3 py-1 rounded-full border border-yellow-800/50">
+                         <span class="material-icons text-xs sm:text-sm">double_arrow</span> 穿甲弹
                       </div>
                    }
                </div>
@@ -343,6 +367,7 @@ export class App implements AfterViewInit, OnDestroy {
   
   partCatalog = [
     { id: 'core', type: 'core', name: '指挥核心', cost: 0, hp: 1, mass: 2, color: '#3b82f6' },
+    { id: 'wingman_core', type: 'wingman_core', name: '僚机核心', cost: 100, hp: 1, mass: 1, color: '#3b82f6' },
     { id: 'hull_light', type: 'hull', name: '轻型框架', cost: 10, hp: 1, mass: 1, color: '#94a3b8' },
     { id: 'hull_heavy', type: 'hull', name: '重型装甲', cost: 40, hp: 2, mass: 3, color: '#475569' },
     { id: 'hull_stealth', type: 'hull', name: '隐形护甲', cost: 120, hp: 1, mass: 1, color: '#1e293b' },
@@ -367,18 +392,21 @@ export class App implements AfterViewInit, OnDestroy {
       {x: 0, y: 0, partId: 'core'}
   ]);
 
+  playerBp: {x: number, y: number, partId: string}[] = [];
+  activeWingmen: ActiveWingman[] = [];
+
   gridRows = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5];
   gridCols = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5];
 
   getPartDef(id: string) { return this.partCatalog.find(p => p.id === id); }
   getPartAt(x: number, y: number) { return this.blueprint().find(p => p.x === x && p.y === y); }
 
-  getShipStats() {
+  getShipStats(bpArray: any[] = this.blueprint()) {
       let mass = 0;
       let thrust = 0;
       let hp = 0;
       const weapons: any[] = [];
-      for(const bp of this.blueprint()) {
+      for(const bp of bpArray) {
           const def = this.getPartDef(bp.partId);
           if(!def) continue;
           mass += def.mass;
@@ -405,10 +433,19 @@ export class App implements AfterViewInit, OnDestroy {
       return stats.thrust > 0;
   }
 
-  dragHoverCell: {x: number, y: number} | null = null;
-  draggedPart: any = null;
-  
-  onCatalogDragStart(e: DragEvent, part: any) {
+   dragHoverCell: {x: number, y: number} | null = null;
+   draggedPart: any = null;
+   selectedMobilePart: any = null;
+   
+   selectMobilePart(part: any) {
+      if (this.selectedMobilePart?.id === part.id) {
+          this.selectedMobilePart = null;
+      } else {
+          this.selectedMobilePart = part;
+      }
+   }
+   
+   onCatalogDragStart(e: DragEvent, part: any) {
       this.draggedPart = part;
       if (e.dataTransfer) {
           e.dataTransfer.setData('text/plain', part.id);
@@ -444,7 +481,7 @@ export class App implements AfterViewInit, OnDestroy {
      
      // Continuity check (KSP style)
      const isConnected = this.blueprint().some(p => Math.abs(p.x - x) + Math.abs(p.y - y) === 1);
-     if (this.blueprint().length > 0 && !isConnected) {
+     if (this.blueprint().length > 0 && !isConnected && part.type !== 'wingman_core') {
          return; // Must connect to existing block
      }
 
@@ -469,6 +506,10 @@ export class App implements AfterViewInit, OnDestroy {
   }
   
   onGridClick(x: number, y: number) {
+      if (this.selectedMobilePart) {
+          this.placePart(x, y, this.selectedMobilePart);
+          return;
+      }
       if (x === 0 && y === 0) return; // Core removal blocked
       const existing = this.getPartAt(x, y);
       if (existing) {
@@ -840,10 +881,67 @@ export class App implements AfterViewInit, OnDestroy {
       this.player = { x: -1000, y: -1000 };
   }
 
+  extractBlueprints() {
+      const fullBp = this.blueprint();
+      this.playerBp = [];
+      this.activeWingmen = [];
+
+      const visited = new Set<string>();
+      const key = (p: any) => `${p.x},${p.y}`;
+      
+      const bfs = (startX: number, startY: number) => {
+          const bp: any[] = [];
+          const queue = [fullBp.find(p => p.x === startX && p.y === startY)].filter(Boolean) as any[];
+          while(queue.length > 0) {
+              const curr = queue.shift()!;
+              const k = key(curr);
+              if (visited.has(k)) continue;
+              visited.add(k);
+              bp.push(curr);
+              
+              for (const other of fullBp) {
+                  if (!visited.has(key(other))) {
+                      if (Math.abs(curr.x - other.x) + Math.abs(curr.y - other.y) === 1) {
+                          queue.push(other);
+                      }
+                  }
+              }
+          }
+          return bp;
+      };
+
+      this.playerBp = bfs(0, 0);
+      
+      for (const p of fullBp) {
+          if (p.partId === 'wingman_core' && !visited.has(key(p))) {
+              const wingmanBp = bfs(p.x, p.y);
+              const stats = this.getShipStats(wingmanBp);
+              const core = wingmanBp.find(b => b.partId === 'wingman_core')!;
+              const shiftedBp = wingmanBp.map(b => ({...b, x: b.x - core.x, y: b.y - core.y}));
+              
+              this.activeWingmen.push({
+                  x: this.player.x + (Math.random() - 0.5) * 100,
+                  y: this.player.y + (Math.random() - 0.5) * 100,
+                  vx: 0,
+                  vy: 0,
+                  bp: shiftedBp,
+                  hp: stats.hp,
+                  maxHp: stats.hp,
+                  weapons: this.getShipStats(shiftedBp).weapons,
+                  speed: stats.speed + 3,
+                  lastShotTime: 0,
+                  angleOffset: Math.random() * Math.PI * 2,
+                  orbitRadius: 120 + Math.random() * 80
+              });
+          }
+      }
+  }
+
   restart() {
+    this.extractBlueprints();
     this.score.set(0);
     this.startFlashTimer = 3000;
-    this.health.set(this.getShipStats().hp);
+    this.health.set(this.getShipStats(this.playerBp).hp);
     this.wave.set(1);
     
     // Initial music scale & BPM
@@ -1180,10 +1278,10 @@ export class App implements AfterViewInit, OnDestroy {
     // Rhythm Update
     const currentTickIndex = Math.floor(time / this.tickInterval);
     
-    if (this.lastTickIndex === -1 && this.audioCtx && this.audioCtx.state === 'running') {
+    if (this.lastTickIndex === -1) {
         this.lastTickIndex = currentTickIndex;
         this.processTick(currentTickIndex);
-    } else if (currentTickIndex > this.lastTickIndex && this.audioCtx && this.audioCtx.state === 'running') {
+    } else if (currentTickIndex > this.lastTickIndex) {
         const ticksMissed = currentTickIndex - this.lastTickIndex;
         // if tab was inactive we might miss a lot of ticks, don't play hundreds of sounds
         for (let i = Math.max(1, ticksMissed - 4); i <= ticksMissed; i++) {
@@ -1264,6 +1362,72 @@ export class App implements AfterViewInit, OnDestroy {
        this.fireWeapon(performance.now());
     }
 
+    if (this.gameStarted() && !this.gameOver() && !this.singularityActive) {
+        for (const w of this.activeWingmen) {
+            // Move: Orbit around player, but offset slightly
+            w.angleOffset += 0.05 * (dt / 16) * (Math.random() > 0.5 ? 1 : 0.9); // Small fluctuation
+            const targetX = this.player.x + Math.cos(w.angleOffset) * w.orbitRadius;
+            const targetY = this.player.y + Math.sin(w.angleOffset) * w.orbitRadius;
+            
+            const dx = targetX - w.x;
+            const dy = targetY - w.y;
+            const dist = Math.hypot(dx, dy);
+            
+            w.vx += (dx / Math.max(1, dist)) * w.speed * 0.1;
+            w.vy += (dy / Math.max(1, dist)) * w.speed * 0.1;
+            
+            w.vx *= 0.85; // friction
+            w.vy *= 0.85;
+            
+            w.x += w.vx;
+            w.y += w.vy;
+
+            // Engine particles for wingmen
+            if (this.mouseDown && Math.random() < 0.3) {
+                this.particles.push({
+                   x: w.x + (Math.random() - 0.5) * 6,
+                   y: w.y + 10,
+                   vx: (Math.random() - 0.5), vy: Math.random() * 2 + 2,
+                   life: 150, maxLife: 150,
+                   color: '#fde047', size: 2, alpha: 1
+                });
+            }
+
+            // Wingman Firing logic
+            if (time - w.lastShotTime > 400 * (1 / this.weaponLevel)) { // Auto fire
+                let firedAny = false;
+                for (const wp of w.weapons) {
+                    // Try to aim at closest enemy
+                    let closestE = null;
+                    let closestDist = Infinity;
+                    for (const e of this.enemies) {
+                        const ed = Math.hypot(e.x - w.x, e.y - w.y);
+                        if (ed < closestDist) { closestDist = ed; closestE = e; }
+                    }
+
+                    if (!closestE || closestDist > 600) continue; // Only fire if target in range
+
+                    const aimAngle = Math.atan2(closestE.y - w.y, closestE.x - w.x);
+
+                    const bSpeed = 15;
+                    this.bullets.push({
+                        x: w.x + wp.x * 8, y: w.y + wp.y * 8,
+                        vx: Math.cos(aimAngle) * bSpeed,
+                        vy: Math.sin(aimAngle) * bSpeed,
+                        radius: 4 + wp.def.damage,
+                        color: wp.def.color,
+                        damage: wp.def.damage * this.weaponLevel
+                    });
+                    this.playShootSynth(1, false);
+                    firedAny = true;
+                }
+                if (firedAny) {
+                    w.lastShotTime = time;
+                }
+            }
+        }
+    }
+
     if (this.showUpgradeUI()) return; // Pause game logic during upgrade selection
 
     if (this.waveTimer > 0) {
@@ -1330,6 +1494,23 @@ export class App implements AfterViewInit, OnDestroy {
           continue;
       }
       const distHit = Math.hypot(b.x - this.player.x, b.y - this.player.y);
+      let hitWingman = false;
+      for (let wIdx = this.activeWingmen.length - 1; wIdx >= 0; wIdx--) {
+          const w = this.activeWingmen[wIdx];
+          if (Math.hypot(b.x - w.x, b.y - w.y) < b.radius + 20) {
+              hitWingman = true;
+              this.enemyBullets.splice(i, 1);
+              w.hp -= 1;
+              this.createExplosion(b.x, b.y, 20, '#f43f5e');
+              if (w.hp <= 0) {
+                  this.createExplosion(w.x, w.y, 50, '#3b82f6');
+                  this.activeWingmen.splice(wIdx, 1);
+              }
+              break;
+          }
+      }
+      if (hitWingman) continue;
+
       if (distHit < b.radius + 25 && this.invulnerableTimer <= 0 && !this.singularityActive) {
           this.enemyBullets.splice(i, 1);
           if (this.hasShield) {
@@ -1645,6 +1826,28 @@ export class App implements AfterViewInit, OnDestroy {
       }
 
       const distPlayer = Math.hypot(e.x - this.player.x, e.y - this.player.y);
+
+      let hitWingman = false;
+      for (let wIdx = this.activeWingmen.length - 1; wIdx >= 0; wIdx--) {
+          const w = this.activeWingmen[wIdx];
+          if (Math.hypot(e.x - w.x, e.y - w.y) < e.radius + 15) {
+              hitWingman = true;
+              e.hp! -= 2;
+              w.hp -= e.type?.endsWith('_boss') ? 5 : 2;
+              this.createExplosion(w.x, w.y, 30, '#f43f5e');
+              if (w.hp <= 0) {
+                  this.createExplosion(w.x, w.y, 50, '#3b82f6');
+                  this.activeWingmen.splice(wIdx, 1);
+              }
+              if (e.hp! <= 0) {
+                  this.createExplosion(e.x, e.y, 40, e.color);
+                  this.enemies.splice(i, 1);
+              }
+              break;
+          }
+      }
+      if (hitWingman) continue;
+
       if (distPlayer < e.radius + 8 && this.invulnerableTimer <= 0) {
         if (this.hasShield) {
           this.hasShield = false;
@@ -2060,106 +2263,130 @@ export class App implements AfterViewInit, OnDestroy {
 
       const blockSize = 8;
       this.ctx.shadowBlur = 10 + this.beatPulse() * 10;
-      this.ctx.save();
-      this.ctx.translate(this.player.x, this.player.y);
       
-      // Draw grid connections/bases first
-      this.ctx.strokeStyle = 'rgba(100, 116, 139, 0.6)';
-      this.ctx.lineWidth = 3;
-      this.ctx.beginPath();
-      for(const bp of this.blueprint()) {
-          const px = bp.x * blockSize;
-          const py = bp.y * blockSize;
+      const drawBp = (x: number, y: number, bpArr: any[], isPlayer: boolean, hp?: number, maxHp?: number) => {
+          this.ctx.save();
+          this.ctx.translate(x, y);
           
-          // Connect to adjacent parts
-          for (const neighbor of this.blueprint()) {
-              if (neighbor.x === bp.x && neighbor.y === bp.y - 1) {
-                  this.ctx.moveTo(px, py);
-                  this.ctx.lineTo(px, py - blockSize);
-              }
-              if (neighbor.x === bp.x - 1 && neighbor.y === bp.y) {
-                  this.ctx.moveTo(px, py);
-                  this.ctx.lineTo(px - blockSize, py);
-              }
-          }
-      }
-      this.ctx.stroke();
-
-      for(const bp of this.blueprint()) {
-          const def = this.getPartDef(bp.partId);
-          if(!def) continue;
-          const px = bp.x * blockSize;
-          const py = bp.y * blockSize;
-          
-          this.ctx.fillStyle = def.color;
-          this.ctx.shadowColor = def.color;
+          this.ctx.strokeStyle = 'rgba(100, 116, 139, 0.4)';
+          this.ctx.lineWidth = 4;
           this.ctx.beginPath();
-          
-          if (def.type === 'core') {
-              this.ctx.arc(px, py, blockSize/2 + 2, 0, Math.PI * 2);
-              this.ctx.fill();
-              this.ctx.fillStyle = '#ffffff';
+          for(const bp of bpArr) {
+              const px = bp.x * blockSize;
+              const py = bp.y * blockSize;
+              for (const neighbor of bpArr) {
+                  if (neighbor.x === bp.x && neighbor.y === bp.y - 1) {
+                      this.ctx.moveTo(px, py);
+                      this.ctx.lineTo(px, py - blockSize);
+                  }
+                  if (neighbor.x === bp.x - 1 && neighbor.y === bp.y) {
+                      this.ctx.moveTo(px, py);
+                      this.ctx.lineTo(px - blockSize, py);
+                  }
+              }
+          }
+          this.ctx.stroke();
+
+          for(const bp of bpArr) {
+              const def = this.getPartDef(bp.partId);
+              if(!def) continue;
+              const px = bp.x * blockSize;
+              const py = bp.y * blockSize;
+              
+              this.ctx.fillStyle = def.color;
+              this.ctx.shadowColor = def.color;
               this.ctx.beginPath();
-              this.ctx.arc(px, py, blockSize/3, 0, Math.PI * 2);
-              this.ctx.fill();
-              this.ctx.fillStyle = '#93c5fd';
-              this.ctx.beginPath();
-              this.ctx.arc(px, py, blockSize/5, 0, Math.PI * 2);
-              this.ctx.fill();
-          } else if (def.type === 'hull') {
-              const hs = blockSize/2;
-              this.ctx.moveTo(px, py - hs);
-              this.ctx.lineTo(px + hs, py);
-              this.ctx.lineTo(px, py + hs);
-              this.ctx.lineTo(px - hs, py);
-              this.ctx.closePath();
-              this.ctx.fill();
-              this.ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-              this.ctx.stroke();
-          } else if (def.type === 'engine') {
-              const hs = blockSize/2;
-              this.ctx.moveTo(px - hs, py - hs);
-              this.ctx.lineTo(px + hs, py - hs);
-              this.ctx.lineTo(px + hs - 2, py + hs);
-              this.ctx.lineTo(px - hs + 2, py + hs);
-              this.ctx.closePath();
-              this.ctx.fill();
-              this.ctx.fillStyle = '#475569';
-              this.ctx.fillRect(px - 2, py, 4, hs); // engine nozzle
-          } else if (def.type === 'weapon') {
-              const hs = blockSize/2;
-              this.ctx.moveTo(px - hs + 1, py + hs);
-              this.ctx.lineTo(px + hs - 1, py + hs);
-              this.ctx.lineTo(px + 2, py - hs);
-              this.ctx.lineTo(px, py - hs - 4);
-              this.ctx.lineTo(px - 2, py - hs);
-              this.ctx.closePath();
-              this.ctx.fill();
-              this.ctx.fillStyle = '#ffffff';
-              this.ctx.fillRect(px - 1, py - hs - 2, 2, hs);
+              
+              if (def.type === 'core' || def.type === 'wingman_core') {
+                  this.ctx.arc(px, py, blockSize/2 + 2, 0, Math.PI * 2);
+                  this.ctx.fill();
+                  this.ctx.fillStyle = '#ffffff';
+                  this.ctx.beginPath();
+                  this.ctx.arc(px, py, blockSize/3, 0, Math.PI * 2);
+                  this.ctx.fill();
+                  this.ctx.fillStyle = '#93c5fd';
+                  this.ctx.beginPath();
+                  this.ctx.arc(px, py, blockSize/5, 0, Math.PI * 2);
+                  this.ctx.fill();
+              } else if (def.type === 'hull') {
+                  const hs = blockSize/2;
+                  this.ctx.fillRect(px - hs, py - hs, blockSize + 0.5, blockSize + 0.5);
+                  this.ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                  this.ctx.lineWidth = 1;
+                  this.ctx.strokeRect(px - hs, py - hs, blockSize + 0.5, blockSize + 0.5);
+              } else if (def.type === 'engine') {
+                  const hs = blockSize/2;
+                  this.ctx.fillRect(px - hs, py - hs, blockSize + 0.5, blockSize + 0.5);
+                  this.ctx.fillStyle = '#475569';
+                  this.ctx.fillRect(px - 2, py + hs - 2, 4, 4); // engine nozzle
+              } else if (def.type === 'weapon') {
+                  const hs = blockSize/2;
+                  this.ctx.fillRect(px - hs + 1, py - hs + 1, blockSize - 2, blockSize - 2);
+                  this.ctx.fillStyle = '#ffffff';
+                  this.ctx.fillRect(px - 1, py - hs - 2, 2, hs + 2);
+              }
+              
+              if(def.type === 'engine' && this.gameStarted() && (!isPlayer || this.mouseDown)) {
+                  this.ctx.fillStyle = '#f59e0b';
+                  this.ctx.shadowColor = '#f59e0b';
+                  const flameLen = 6 + Math.random() * 6 + this.beatPulse() * 4;
+                  this.ctx.beginPath();
+                  this.ctx.moveTo(px - 3, py + blockSize/2);
+                  this.ctx.lineTo(px + 3, py + blockSize/2);
+                  this.ctx.lineTo(px, py + blockSize/2 + flameLen);
+                  this.ctx.closePath();
+                  this.ctx.fill();
+                  
+                  this.ctx.fillStyle = '#fde047';
+                  this.ctx.beginPath();
+                  this.ctx.moveTo(px - 1, py + blockSize/2);
+                  this.ctx.lineTo(px + 1, py + blockSize/2);
+                  this.ctx.lineTo(px, py + blockSize/2 + flameLen * 0.6);
+                  this.ctx.closePath();
+                  this.ctx.fill();
+              }
           }
           
-          if(def.type === 'engine' && this.gameStarted() && this.mouseDown) {
-              this.ctx.fillStyle = '#f59e0b';
-              this.ctx.shadowColor = '#f59e0b';
-              const flameLen = 6 + Math.random() * 6 + this.beatPulse() * 4;
-              this.ctx.beginPath();
-              this.ctx.moveTo(px - 3, py + blockSize/2);
-              this.ctx.lineTo(px + 3, py + blockSize/2);
-              this.ctx.lineTo(px, py + blockSize/2 + flameLen);
-              this.ctx.closePath();
-              this.ctx.fill();
+          this.ctx.shadowBlur = 0;
+          for(const bp of bpArr) {
+              const px = bp.x * blockSize;
+              const py = bp.y * blockSize;
               
-              this.ctx.fillStyle = '#fde047';
-              this.ctx.beginPath();
-              this.ctx.moveTo(px - 1, py + blockSize/2);
-              this.ctx.lineTo(px + 1, py + blockSize/2);
-              this.ctx.lineTo(px, py + blockSize/2 + flameLen * 0.6);
-              this.ctx.closePath();
-              this.ctx.fill();
+              for (const neighbor of bpArr) {
+                  if (neighbor.x === bp.x && neighbor.y === bp.y - 1) {
+                      this.ctx.fillStyle = '#334155';
+                      this.ctx.fillRect(px - 2.5, py - blockSize/2 - 2.5, 5, 5);
+                      this.ctx.fillStyle = '#94a3b8';
+                      this.ctx.fillRect(px - 1, py - blockSize/2 - 1, 2, 2);
+                  }
+                  if (neighbor.x === bp.x - 1 && neighbor.y === bp.y) {
+                      this.ctx.fillStyle = '#334155';
+                      this.ctx.fillRect(px - blockSize/2 - 2.5, py - 2.5, 5, 5);
+                      this.ctx.fillStyle = '#94a3b8';
+                      this.ctx.fillRect(px - blockSize/2 - 1, py - 1, 2, 2);
+                  }
+              }
+          }
+
+          if (hp !== undefined && maxHp !== undefined && hp < maxHp) {
+              this.ctx.fillStyle = 'rgba(0,0,0,0.5)';
+              this.ctx.fillRect(-15, 20, 30, 4);
+              this.ctx.fillStyle = '#3b82f6';
+              this.ctx.fillRect(-15, 20, 30 * (Math.max(0, hp) / maxHp), 4);
+          }
+
+          this.ctx.restore();
+      };
+
+      const mainBp = this.gameStarted() ? this.playerBp : this.blueprint();
+      drawBp(this.player.x, this.player.y, mainBp, true);
+
+      if (this.gameStarted()) {
+          for (const w of this.activeWingmen) {
+              drawBp(w.x, w.y, w.bp, false, w.hp, w.maxHp);
           }
       }
-      this.ctx.restore();
+
       this.ctx.globalAlpha = 1;
       
       if (this.singularityActive) {
