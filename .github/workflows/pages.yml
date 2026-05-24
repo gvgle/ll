@@ -35,6 +35,8 @@ jobs:
         run: touch dist/app/browser/.nojekyll
 
       - name: Publish to gh-pages branch
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           cd dist/app/browser
           git init
